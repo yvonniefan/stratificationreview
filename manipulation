@@ -1,0 +1,40 @@
+%let survey = survey_name;
+%let year = 2018;
+
+libname &survey&year "\\testFolder\&survey\&year\GES";
+
+%macro coeffvar(env);
+
+proc sql ;
+create table cv_&env as
+select strat_oe, estimate, stderr,
+
+cats(substr(strat_oe,11,2),'_',substr(strat_oe,5,6)) as pr_n6, cats(substr(strat_oe,11,2),'_',substr(strat_oe,5,5)) as pr_n5, cats(substr(strat_oe,11,2),'_',substr(strat_oe,5,4)) as pr_n4,
+cats(substr(strat_oe,11,2),'_',substr(strat_oe,5,3)) as pr_n3, cats(substr(strat_oe,11,2),'_',substr(strat_oe,5,2)) as pr_n2, cats(substr(strat_oe,11,2),'_',substr(strat_oe,5,1)) as pr_n1,
+
+stderr**2 as variance
+from &survey.&year..domainest
+where not missing(strat_oe)
+;
+quit;
+
+%let domains = pr_n6 pr_n5 pr_n4 pr_n3 pr_n2 pr_n1;
+
+%do i = 1 %to 6;
+proc means data=cv_&env noprint ;
+class %scan(&domains,&i) ;
+var estimate VARIANCE ;
+output out=cv_&env._%scan(&domains,&i) sum=;
+run ;
+
+DATA CV_&env._%scan(&domains,&i);
+format prov $3. code $6.;
+SET cv_&env._%scan(&domains,&i) ;
+CV=SQRT(VARIANCE)/ESTIMATE ;
+code = substr(%scan(&domains,&i),4);
+prov = substr(%scan(&domains,&i),1,2);
+RUN;
+%end;
+
+%mend coeffvar ;
+%coeffvar(dev);
